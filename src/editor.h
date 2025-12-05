@@ -11,6 +11,7 @@
 #include<termios.h>
 #include<fcntl.h>
 #include<sys/ioctl.h>
+#include<math.h>
 #include"action.h"
 #include"textbuffer.h"
 

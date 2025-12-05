@@ -5,6 +5,12 @@ static char command[MAX_COMMAND_SIZE][MAX_COMMAND_ARGS];
 static int  argument_count;
 static bool running;
 static size_t cursorpos;
+static size_t line=1;
+
+int
+min(int a, int b){
+	return(a<b)?a:b;
+}
 
 void
 getcommand(void){
@@ -162,6 +168,7 @@ upon_open(action_t *this, txtbuffer_t *buf, const char **argv, size_t argc){
 		chr=fgetc(fp);
 	}
 	cursorpos=0;
+	line=1;
 	editorredraw();
 	movecurs(1, getheight());
 	printf("argc=%ld",argc);
@@ -228,6 +235,7 @@ initeditor(void){
 	struct termios termios_p;
 	tcgetattr(STDIN_FILENO, &termios_p);
 	termios_p.c_lflag &= ~(ICANON |  ECHO);
+	termios_p.c_iflag &= ~(IXON | IXOFF);
 	tcsetattr(STDIN_FILENO, TCSANOW, &termios_p);
 	
 	int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
@@ -281,6 +289,7 @@ cleanupeditor(void){
 	struct termios termios_p;
 	tcgetattr(STDIN_FILENO, &termios_p);
 	termios_p.c_lflag |= (ICANON |  ECHO);
+	termios_p.c_iflag |= (IXON | IXOFF);
 	tcsetattr(STDIN_FILENO, TCSANOW, &termios_p);
 
 	int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
@@ -368,23 +377,6 @@ getposfromidx(size_t idx, int *x, int *y){
 	*y = screen_y;
 }
 
-void
-editorredraw(void){
-	printf("\033[2J");
-	printf("\033[H");
-	fflush(stdout);
-
-	txtbuffer_t *buff = grabbuffer();
-	if (!buff)return;
-	for(size_t i=0;i<buff->len;++i){
-		printf("%c", findat(i)->val);
-	}
-
-	int x,y;
-	getposfromidx(cursorpos, &x,&y);
-	movecurs(x,y);
-}
-
 size_t
 getidxfrompos(int target_x, int target_y){
 	txtbuffer_t *buff = grabbuffer();
@@ -412,6 +404,34 @@ getidxfrompos(int target_x, int target_y){
 		idx++;
 	}
 	return idx;
+}
+
+void
+editorredraw(void){
+	size_t height=getheight();
+	int x=1,y=line;
+	size_t startpos=0;
+	if(line>1&&cursorpos>0)
+		startpos = getidxfrompos(1,line);
+	printf("\033[2J");
+	printf("\033[H");
+	fflush(stdout);
+
+	txtbuffer_t *buff = grabbuffer();
+	if (!buff)return;
+	for(size_t i=startpos;i<buff->len;++i){
+		char chr=findat(i)->val;
+		if(chr=='\n'){
+			y+=1;
+		}if((y-line)>=height-2){
+			i=buff->len;
+			continue;
+		}
+		printf("%c", chr);
+	}
+
+	getposfromidx(cursorpos, &x,&y);
+	movecurs(x,y-(line-1));
 }
 
 void
@@ -444,13 +464,35 @@ editor(void){
 		int x,y;
 		if(ctrlkey==('A'&0x1f)&&cursorpos>0){
 			getposfromidx(--cursorpos,&x,&y);
-	 		movecurs(x,y);
+	 		movecurs(x,y-(line-1));
 			fflush(stdout);
 			return;
-		}if(ctrlkey==('D'&0x1f)&&cursorpos<grabbuffer()->len){
+		}else if(ctrlkey==('D'&0x1f)&&cursorpos<grabbuffer()->len){
 			getposfromidx(++cursorpos,&x,&y);
-			movecurs(x,y);
+			movecurs(x,y-(line-1));
 			fflush(stdout);
+			return;
+		}else if(ctrlkey==('W'&0x1f)&&line>=1){
+			getposfromidx(cursorpos,&x,&y);
+			y -= 1;
+			cursorpos=getidxfrompos(min(x,getlinelength(y)),y);
+			movecurs(x,y-(line-1));
+			fflush(stdout);
+			return;
+		}else if(ctrlkey==('S'&0x1f)){
+			getposfromidx(cursorpos,&x,&y);
+			y += 1;
+			cursorpos=getidxfrompos(min(x,getlinelength(y)),y);
+			movecurs(x,y-(line-1));
+			fflush(stdout);
+			return;
+		}else if(ctrlkey==('E'&0x1f)){
+			line-=1;
+			editorredraw();
+			return;
+		}else if(ctrlkey==('Q'&0x1f)){
+			line+=1;
+			editorredraw();
 			return;
 		}
 	}if(chr==COMMAND_CHARACTER){
@@ -480,13 +522,12 @@ editor(void){
 				movecurs(getlinelength(y - 1) + 1, y - 1);
 			}
 			//redrawfrom(cursorpos - 16);
-			editorredraw();
 			removeat(--cursorpos);
+			editorredraw();
 		}else{
 			//redrawfrom(cursorpos - 16);
-			editorredraw();
 			removeat(--cursorpos);
-			printf("\b \b");
+			editorredraw();
 			fflush(stdout);
 		}
 	}
