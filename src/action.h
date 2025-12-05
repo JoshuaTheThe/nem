@@ -13,7 +13,8 @@
 
 #define MAX_SEQUENCE_LENGTH (32UL)
 
-typedef enum{
+typedef
+enum{
 	HOOK_NONE,
 	HOOK_DELETE,
 } hook_t;
