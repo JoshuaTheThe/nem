@@ -21,10 +21,23 @@ enum{
 
 typedef
 struct _ACTION_{
+        /**
+         * Linked list previous && next
+         * pointers.
+         */
 	struct _ACTION_ *prv;
 	struct _ACTION_ *nxt;
+
+        /**
+         * The desired sequence for it's execution, and it's length.
+         */
 	char sequence[MAX_SEQUENCE_LENGTH];
 	size_t sequnencelen;
+
+        /**
+         * Unique sequentially (originally)
+         * assigned Identifier.
+         */
 	size_t id;
 
 	/* Return true upon an error, takes itself
@@ -32,19 +45,29 @@ struct _ACTION_{
 	bool (*upon)(struct _ACTION_ *, txtbuffer_t*);
 	bool (*hook)(struct _ACTION_ *, hook_t hook);
 
-	/* Data that the upon function can use,
-	 * i reccomend using it so that we can cleanup properly;
+	/* Data that the upon and hook functions can use,
 	 * use the hook function's delete hook to cleanup properly for
-	 * nested data. */
+	 * nested data. (as in, this points to a pointer,
+         * this itself is freed) if it is non-NULL. */
 	void *static_data;
 } action_t;
 
 /* Management */
+
+/* Append an action to the linked list */
 void appendaction(action_t *action);
+
+/* Create/Delete a/* new/an empty/* action */
 action_t *createaction(void);
 void removeaction(action_t *action);
+
+/* Find an action by it's id */
 action_t *findaction(size_t id);
+
+/* Setup an action */
 bool setaction(action_t *action, char *sequence, size_t len);
+
+/* Delete them all */
 void cleanupactions(void);
 
 /* En-act */
