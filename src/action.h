@@ -8,6 +8,7 @@
 #include<stddef.h>
 #include<unistd.h>
 #include<string.h>
+#include<dlfcn.h>
 
 #include"textbuffer.h"
 
@@ -30,8 +31,10 @@ struct _ACTION_{
 
         /**
          * The desired sequence for it's execution, and it's length.
+	 * As-well as a hash, for performance.
          */
 	char sequence[MAX_SEQUENCE_LENGTH];
+	size_t hash;
 	size_t sequnencelen;
 
         /**
@@ -42,14 +45,20 @@ struct _ACTION_{
 
 	/* Return true upon an error, takes itself
 	 * and the working buffer as parameters. */
-	bool (*upon)(struct _ACTION_ *, txtbuffer_t*);
+	bool (*upon)(struct _ACTION_ *, txtbuffer_t*, const char **argv, size_t argc);
 	bool (*hook)(struct _ACTION_ *, hook_t hook);
+	bool (*init)(struct _ACTION_ *);
 
 	/* Data that the upon and hook functions can use,
 	 * use the hook function's delete hook to cleanup properly for
 	 * nested data. (as in, this points to a pointer,
          * this itself is freed) if it is non-NULL. */
 	void *static_data;
+
+	/**
+	 * The pointer to the Shared Object
+	 */
+	void *dl_handle;
 } action_t;
 
 /* Management */
@@ -57,12 +66,14 @@ struct _ACTION_{
 /* Append an action to the linked list */
 void appendaction(action_t *action);
 
-/* Create/Delete a/* new/an empty/* action */
-action_t *createaction(void);
+/* Create/Delete a/<none> new/an empty/<none> action */
+action_t *createaction(char *object_path);
 void removeaction(action_t *action);
 
 /* Find an action by it's id */
 action_t *findaction(size_t id);
+/* Same, but by it's hash */
+action_t *findactionhash(size_t hash);
 
 /* Setup an action */
 bool setaction(action_t *action, char *sequence, size_t len);
@@ -71,7 +82,9 @@ bool setaction(action_t *action, char *sequence, size_t len);
 void cleanupactions(void);
 
 /* En-act */
-bool action(action_t *act, txtbuffer_t *buff);
+bool action(action_t *act, txtbuffer_t *buff, const char **argv, size_t argc);
+
+size_t hashsequence(char *seq, size_t len);
 
 #endif
 

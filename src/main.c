@@ -4,10 +4,11 @@
 
 #include"textbuffer.h"
 #include"action.h"
+#include"editor.h"
 
 int
 main(void){
-	txtelement_t *te;
+/*	txtelement_t *te;
 	size_t i;
 	initbuffers();
 	(void)createbuffer();
@@ -23,10 +24,20 @@ main(void){
 			printf("char.%ld is %c (%d, %p)\n", i, te->val, te->val, te);
 		else
 			printf("not found: %ld\n", i);
+	}*/
+
+	initeditor();
+	initbuffers();
+	(void)createbuffer();
+	editorredraw();
+	
+	while(editorrunning()){
+		editor();
 	}
 
 	cleanupbuffers();
 	cleanupactions();
+	cleanupeditor();
 	return(0);
 }
 

@@ -70,7 +70,11 @@ void focusprev(void);
 txtbuffer_t *grabbuffer(void);
 
 /* Remove all of the text from a buffer. */
+void emptybuffer(txtbuffer_t *buff);
+
+/* Remove all of the text from a buffer, and delete it. */
 void cleanupbuffer(txtbuffer_t *buff);
+void cleanupelement(txtelement_t *elem);
 
 /* Delete all of the buffers. */
 void cleanupbuffers(void);

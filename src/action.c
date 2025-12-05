@@ -29,10 +29,21 @@ appendaction(action_t *action){
 }
 
 action_t *
-createaction(void){
+createaction(char *object_path){
 	action_t *new=(action_t*)calloc(1,sizeof(*new));
 	if(!new){
 		return((action_t*)NULL);
+	}
+
+	if(object_path)
+		new->dl_handle = dlopen(object_path, RTLD_LAZY|RTLD_LOCAL);
+	if(!new->dl_handle&&object_path){
+		free(new);
+		return((action_t*)NULL);
+	}if(new->dl_handle&&object_path){
+		new->upon=dlsym(new->dl_handle,"upon");
+		new->hook=dlsym(new->dl_handle,"hook");
+		new->hook=dlsym(new->dl_handle,"init");
 	}
 	appendaction(new);
 	return new;
@@ -62,6 +73,18 @@ findaction(size_t id){
 	return((action_t*)NULL);
 }
 
+action_t *
+findactionhash(size_t hash){
+	action_t *action=actions;
+	while(action){
+		if(action->hash==hash){
+			return action;
+		}
+		action=action->nxt;
+	}
+	return((action_t*)NULL);
+}
+
 bool
 setaction(action_t *action, char *sequence, size_t len){
 	if(!action||!sequence){ return true; }
@@ -82,6 +105,8 @@ cleanupact(action_t *act){
 				res ? "with errors" : "successfully");
 	}if(act->static_data){
 		free(act->static_data);
+	}if(act->dl_handle){
+		dlclose(act->dl_handle);
 	}
 	memset(act,0,sizeof(*act));
 	free(act);
@@ -106,9 +131,22 @@ cleanupactions(void){
  */
 
 bool
-action(action_t *act, txtbuffer_t *buff){
+action(action_t *act, txtbuffer_t *buff, const char **argv, size_t argc){
 	if(!act)return true;
-	bool res=act->upon(act, buff);
+	bool res=act->upon(act, buff, argv, argc);
 	return res;
+}
+
+/**
+ * Our Hashing function, very simple.
+ */
+
+size_t
+hashsequence(char *seq, size_t len){
+	if(!seq)return(-1);
+        size_t k=0,i=0;
+        for (; i<len && seq[i]; ++i)
+                k=k*(i+1)+seq[i];
+        return k;
 }
 

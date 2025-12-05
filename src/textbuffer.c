@@ -77,6 +77,19 @@ grabbuffer(void){
 }
 
 void
+emptybuffer(txtbuffer_t *buff){
+	if(!buff)return;
+	txtelement_t *curr=buff->dat;
+	txtelement_t *prev=(txtelement_t*)NULL;
+	while(curr){
+		cleanupelement(prev);
+		prev=curr;
+		curr=curr->nxt;
+	}
+	cleanupelement(prev);
+}
+
+void
 cleanupelement(txtelement_t *elem){
 	if(!elem)return;
 	memset(elem,0,sizeof(*elem));
@@ -86,15 +99,7 @@ cleanupelement(txtelement_t *elem){
 void
 cleanupbuffer(txtbuffer_t *buff){
 	if(!buff)return;
-	txtelement_t *curr = buff->dat;
-	txtelement_t *prev = (txtelement_t *)NULL;
-	while(curr){
-		cleanupelement(prev);
-		prev=curr;
-		curr=curr->nxt;
-	}
-	cleanupelement(prev);
-	memset(buff,0,sizeof(*buff));
+	emptybuffer(buff);
 	free(buff);
 }
 
