@@ -8,9 +8,16 @@
 #include<stdbool.h>
 #include<stddef.h>
 #include<unistd.h>
-#include<termios.h>
+
+#ifdef _WIN32
+	#include<conio.h>
+	#include<windows.h>
+#else
+	#include<termios.h>
+	#include<sys/ioctl.h>
+#endif
+
 #include<fcntl.h>
-#include<sys/ioctl.h>
 #include<math.h>
 #include"action.h"
 #include"textbuffer.h"
@@ -26,7 +33,11 @@ void initeditor(void);
 bool editorrunning(void);
 void editor(void);
 void cleanupeditor(void);
-bool kbhit(void);
+
+#ifndef _WIN32
+	bool kbhit(void);
+#endif
+
 int getheight(void);
 int getwidth(void);
 void editorredraw(void);

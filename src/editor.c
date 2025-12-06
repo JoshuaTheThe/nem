@@ -7,10 +7,14 @@ static bool running;
 static size_t cursorpos;
 static size_t line=1;
 
+#ifndef _WIN32
+
 int
 min(int a, int b){
 	return(a<b)?a:b;
 }
+
+#endif
 
 void
 getcommand(void){
@@ -31,7 +35,8 @@ getcommand(void){
 		case '\r':
 		case COMMAND_CHARACTER:
 			fflush(stdout);
-			tcflush(STDIN_FILENO, TCIFLUSH);
+			fflush(stdin);
+			//tcflush(STDIN_FILENO, TCIFLUSH);
 			goto end;
 		case 127:
 		case '\b':
@@ -54,6 +59,24 @@ end:
 	rawcommand[i] = '\0';
 	return;
 }
+
+#ifdef _WIN32
+
+bool
+getpos(int *x, int *y){
+	HANDLE hConsole=GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	if(GetConsoleScreenBufferInfo(hConsole,&csbi)){
+		*x = csbi.dwCursorPosition.X;
+		*y = csbi.dwCursorPosition.Y;
+		return false;
+	}else{
+		*x=*y=0;
+		return true;
+	}
+}
+
+#else
 
 bool
 getpos(int *x, int *y){
@@ -95,6 +118,8 @@ getpos(int *x, int *y){
 	}
 	return true;
 }
+
+#endif
 
 void
 parsecommand(void){
@@ -202,6 +227,36 @@ signal(int signum){
 	}
 }
 
+#ifdef _WIN32
+
+int
+getwidth(void){
+	HANDLE hConsole=GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	if (hConsole == INVALID_HANDLE_VALUE){
+		return 80;
+	}if(!GetConsoleScreenBufferInfo(hConsole,&csbi)){
+		return 80;
+	}
+
+	return csbi.srWindow.Right - csbi.srWindow.Left + 1;
+}
+
+int
+getheight(void){
+	HANDLE hConsole=GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	if (hConsole == INVALID_HANDLE_VALUE){
+		return 25;
+	}if(!GetConsoleScreenBufferInfo(hConsole,&csbi)){
+		return 25;
+	}
+
+	return csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+}
+
+#else
+
 int
 getheight(void){
 	struct winsize w;
@@ -222,6 +277,8 @@ getwidth(void){
 	}
 }
 
+#endif
+
 void
 movecurs(int x, int y){
 	printf("\033[%d;%dH", y, x);
@@ -232,6 +289,7 @@ initeditor(void){
 	/**
 	 * Set-up Terminal
 	 */
+#ifndef _WIN32
 	struct termios termios_p;
 	tcgetattr(STDIN_FILENO, &termios_p);
 	termios_p.c_lflag &= ~(ICANON |  ECHO);
@@ -240,6 +298,7 @@ initeditor(void){
 	
 	int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
 	fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
+#endif
 
 	/**
 	 * Set-up Initial commands
@@ -285,7 +344,7 @@ cleanupeditor(void){
 	/**
 	 * Restore Terminal
 	 */
-	
+#ifndef _WIN32	
 	struct termios termios_p;
 	tcgetattr(STDIN_FILENO, &termios_p);
 	termios_p.c_lflag |= (ICANON |  ECHO);
@@ -294,6 +353,7 @@ cleanupeditor(void){
 
 	int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
 	fcntl(STDIN_FILENO, F_SETFL, flags & ~O_NONBLOCK);
+#endif
 }
 
 bool
@@ -313,6 +373,8 @@ execcommand(void){
 	action(act, grabbuffer(), args, argument_count);
 }
 
+#ifndef _WIN32
+
 bool
 kbhit(void){
 	struct timeval tv = {0, 0};
@@ -321,6 +383,8 @@ kbhit(void){
 	FD_SET(STDIN_FILENO, &fds);
 	return select(1, &fds, NULL, NULL, &tv) > 0;
 }
+
+#endif
 
 int
 getlinelength(int line_num){
@@ -461,7 +525,7 @@ editor(void){
 	char chr=getchar();
 	if((chr&0x1f)==chr){
 		int ctrlkey = chr;
-		int x,y;
+		int x,y,y2;
 		if(ctrlkey==('A'&0x1f)&&cursorpos>0){
 			getposfromidx(--cursorpos,&x,&y);
 	 		movecurs(x,y-(line-1));
@@ -476,6 +540,7 @@ editor(void){
 			getposfromidx(cursorpos,&x,&y);
 			y -= 1;
 			cursorpos=getidxfrompos(min(x,getlinelength(y)),y);
+			getposfromidx(cursorpos,&x,&y2);
 			movecurs(x,y-(line-1));
 			fflush(stdout);
 			return;
@@ -483,6 +548,7 @@ editor(void){
 			getposfromidx(cursorpos,&x,&y);
 			y += 1;
 			cursorpos=getidxfrompos(min(x,getlinelength(y)),y);
+			getposfromidx(cursorpos,&x,&y2);
 			movecurs(x,y-(line-1));
 			fflush(stdout);
 			return;
