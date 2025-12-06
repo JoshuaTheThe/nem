@@ -87,6 +87,8 @@ emptybuffer(txtbuffer_t *buff){
 		curr=curr->nxt;
 	}
 	cleanupelement(prev);
+        buff->dat = 0;
+        buff->len = 0;
 }
 
 void
@@ -133,6 +135,21 @@ findatin(txtbuffer_t *buff, size_t at){
 }
 
 void
+removechar(txtelement_t *p, txtbuffer_t *buff){
+        if(!p||!buff)return;
+        if(p->nxt){
+		p->nxt->prv=p->prv;
+	}if(p->prv){
+		p->prv->nxt=p->nxt;
+	}if(buff->dat==p){
+		buff->dat=p->nxt;
+	}
+	memset(p,0,sizeof(*p));
+	free(p);
+	buff->len-=1;
+}
+
+void
 removeatin(txtbuffer_t *buff, size_t at){
 	txtelement_t *p=findatin(buff, at);
 	if(at==(size_t)-1L){
@@ -152,26 +169,27 @@ removeatin(txtbuffer_t *buff, size_t at){
 	buff->len-=1;
 }
 
-void
+txtelement_t *
 insertatin(txtbuffer_t *buff, wchar ch, size_t at){
-	if(!buff)return;
+	if(!buff)return NULL;
 	if(at==(size_t)-1L){
 		insertatin(buff,ch,buff->len);
-		return;
+		return NULL;
 	}
 	txtelement_t *new=calloc(1,sizeof(*new));
+        if(!new)return NULL;
 	txtelement_t *nxt=findatin(buff, at);
 	new->val=ch;
 	buff->len+=1;
 	new->nxt=nxt;
 	if(!buff->dat){
 		buff->dat=new;
-		return;
+		return new;
 	}if(at==buff->len-1){
 		txtelement_t *prv=findatin(buff, at-1);
 		prv->nxt=new;
 		new->prv=prv;
-		return;
+		return new;
 	}else if(nxt){
 		new->prv=nxt->prv;
 		nxt->prv=new;
@@ -180,11 +198,12 @@ insertatin(txtbuffer_t *buff, wchar ch, size_t at){
 	}if(at==0){
 		buff->dat=new;
 	}
+        return new;
 }
 
-void
+txtelement_t *
 insertat(wchar ch, size_t at){
-	insertatin(working_buffer,ch,at);
+	return insertatin(working_buffer,ch,at);
 }
 
 void

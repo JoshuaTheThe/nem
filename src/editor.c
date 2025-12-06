@@ -6,6 +6,8 @@ static int  argument_count;
 static bool running;
 static size_t cursorpos;
 static size_t line=1;
+static int fg,bg;
+static txtelement_t *elem,*lineelem;
 
 #ifndef _WIN32
 
@@ -46,7 +48,7 @@ getcommand(void){
 			printf("\b \b");
 			fflush(stdout);
 			rawcommand[i] = '\0';
-			break;
+                        break;
 		default:
 			printf("%c", chr);
 			fflush(stdout);
@@ -146,9 +148,9 @@ upon_redraw(action_t *this, txtbuffer_t *buf, const char **argv, size_t argc){
 	(void)buf;
 	(void)argv;
 	(void)argc;
-        editorredraw();
-        movecurs(1, getheight());
-        printf("Redrew");
+	editorredraw();
+	movecurs(1, getheight());
+	printf("Redrew");
 	return(false);
 }
 
@@ -171,18 +173,23 @@ upon_save(action_t *this, txtbuffer_t *buf, const char **argv, size_t argc){
 	movecurs(1, getheight());
 	printf("argc=%ld",argc);
 	free(path);
+        fclose(fp);
 	return false;
 }
 
 bool
 upon_open(action_t *this, txtbuffer_t *buf, const char **argv, size_t argc){
 	(void)this;
-	char *path="test.txt";
+	char *path=strdup("test.txt");
 	if(argc>1){
+                free(path);
 		path=strdup(argv[1]);
-	}
+	}if(!path){
+                return true;
+        }
 	FILE *fp = fopen(path, "r");
 	if(!fp){
+                free(path);
 		return true;
 	}
 	emptybuffer(buf);
@@ -194,10 +201,12 @@ upon_open(action_t *this, txtbuffer_t *buf, const char **argv, size_t argc){
 	}
 	cursorpos=0;
 	line=1;
+        elem=lineelem=buf->dat;
 	editorredraw();
 	movecurs(1, getheight());
 	printf("argc=%ld",argc);
 	free(path);
+	fclose(fp);
 	return false;
 }
 
@@ -289,6 +298,10 @@ initeditor(void){
 	/**
 	 * Set-up Terminal
 	 */
+	fg=37;
+	bg=44;
+        elem=NULL;
+        lineelem=NULL;
 #ifndef _WIN32
 	struct termios termios_p;
 	tcgetattr(STDIN_FILENO, &termios_p);
@@ -392,20 +405,29 @@ getlinelength(int line_num){
 	if(buff->len == 0) return 0;
 	int current_line = 1;
 	size_t line_start_idx = 0;
+        txtelement_t *el=buff->dat;
+        if(!el)return 0;
+
 	for(size_t i = 0; i < buff->len; i++){
-		if(current_line == line_num){
+                if(!el){
+                        break;
+                }if(current_line == line_num){
 			line_start_idx = i;
 			break;
-		}if(findat(i)->val == '\n'){
+		}if(el->val == '\n'){
 			current_line++;
 		}
+                el=el->nxt;
 	}
 	if(current_line < line_num)
 		return 0;
 	int length = 0;
 	for(size_t i = line_start_idx; i < buff->len; i++){
-		char c = findat(i)->val;
-		if(c == '\n'){
+                if(!el)
+                        break;
+		char c = el->val;
+                el=el->nxt;
+                if(c == '\n'){
 			break;
 		}
 		length++;
@@ -416,10 +438,14 @@ getlinelength(int line_num){
 void
 getposfromidx(size_t idx, int *x, int *y){
 	txtbuffer_t *buff = grabbuffer();
+        if (!buff)return;
 	int screen_x = 1, screen_y = 1;
 	int screen_width = getwidth();
-	for(size_t i = 0; i < idx && i < buff->len; i++){
-		char c = findat(i)->val;
+        txtelement_t *base = buff->dat;
+        if (!base)return;
+        size_t counter = 0;
+	while(base && counter++ < idx){
+		char c = base->val;
 		if(c == '\n'){
 			screen_y++;
 			screen_x = 1;
@@ -436,6 +462,7 @@ getposfromidx(size_t idx, int *x, int *y){
 				screen_y++;
 			}
 		}
+                base=base->nxt;
 	}
 	*x = screen_x;
 	*y = screen_y;
@@ -444,11 +471,14 @@ getposfromidx(size_t idx, int *x, int *y){
 size_t
 getidxfrompos(int target_x, int target_y){
 	txtbuffer_t *buff = grabbuffer();
+        if (!buff)return 0;
+        txtelement_t *el = buff->dat;
+        if (!el)return 0;
 	int screen_x = 1, screen_y = 1;
 	int screen_width = getwidth();
 	size_t idx = 0;
-	while(idx < buff->len && (screen_y < target_y || (screen_y == target_y && screen_x < target_x))){
-		char c = findat(idx)->val;
+	while(el&&idx < buff->len && (screen_y < target_y || (screen_y == target_y && screen_x < target_x))){
+		char c = el->val;
 		if(c == '\n'){
 			screen_y++;
 			screen_x = 1;
@@ -465,57 +495,56 @@ getidxfrompos(int target_x, int target_y){
 				screen_y++;
 			}
 		}
+                el=el->nxt;
 		idx++;
 	}
 	return idx;
 }
 
 void
+setcol(int foreground, int background){
+	printf("\033[%d;%dm", foreground, background);
+}
+
+void
 editorredraw(void){
+	setcol(fg,bg);
 	size_t height=getheight();
 	int x=1,y=line;
 	size_t startpos=0;
+
+	int csx=1,csy=1;
+	getposfromidx(cursorpos, &csx, &csy);
 	if(line>1&&cursorpos>0)
 		startpos = getidxfrompos(1,line);
 	printf("\033[2J");
 	printf("\033[H");
-	fflush(stdout);
 
 	txtbuffer_t *buff = grabbuffer();
+        txtelement_t *ele = lineelem;
 	if (!buff)return;
 	for(size_t i=startpos;i<buff->len;++i){
-		char chr=findat(i)->val;
+                if(!ele)
+                        break;
+		char chr=ele->val;
 		if(chr=='\n'){
 			y+=1;
 		}if((y-line)>=height-2){
-			i=buff->len;
-			continue;
+                        break;
 		}
+		++x;
 		printf("%c", chr);
+                ele=ele->nxt;
 	}
 
-	getposfromidx(cursorpos, &x,&y);
-	movecurs(x,y-(line-1));
-}
+        while((y-line)<height-3){
+                printf("\n~");
+                y+=1;
+        }
 
-void
-redrawfrom(size_t idx){
-	txtbuffer_t *buff = grabbuffer();
-	int cursor_x, cursor_y;
-	getpos(&cursor_x, &cursor_y);
-	
-	int start_x, start_y;
-	getposfromidx(idx, &start_x, &start_y);
-	movecurs(start_x, start_y);
-	printf("\033[J");
-	fflush(stdout);
-	
-	for(size_t i=idx;i<buff->len;i++){
-		char c = findat(i)->val;
-		printf("%c", c);
-	}
-	
-	movecurs(cursor_x, cursor_y);
+	movecurs(1, height);
+	printf("Going to %d,%d, startpos=%ld",csx,csy, startpos);
+	movecurs(csx,csy-(line-1));
 	fflush(stdout);
 }
 
@@ -525,40 +554,70 @@ editor(void){
 	char chr=getchar();
 	if((chr&0x1f)==chr){
 		int ctrlkey = chr;
-		int x,y,y2;
+		int x=1,y=1;
+                fflush(stdin);
+                getposfromidx(cursorpos, &x, &y);
 		if(ctrlkey==('A'&0x1f)&&cursorpos>0){
-			getposfromidx(--cursorpos,&x,&y);
+			--cursorpos;
+                        getposfromidx(cursorpos, &x, &y);
 	 		movecurs(x,y-(line-1));
+                        if(elem&&elem->prv)
+                                elem=elem->prv;
 			fflush(stdout);
 			return;
 		}else if(ctrlkey==('D'&0x1f)&&cursorpos<grabbuffer()->len){
-			getposfromidx(++cursorpos,&x,&y);
+			++cursorpos;
+                        getposfromidx(cursorpos, &x, &y);
 			movecurs(x,y-(line-1));
+                        if(elem&&elem->nxt)
+                                elem=elem->nxt;
 			fflush(stdout);
 			return;
-		}else if(ctrlkey==('W'&0x1f)&&line>=1){
-			getposfromidx(cursorpos,&x,&y);
-			y -= 1;
-			cursorpos=getidxfrompos(min(x,getlinelength(y)),y);
-			getposfromidx(cursorpos,&x,&y2);
-			movecurs(x,y-(line-1));
-			fflush(stdout);
+		} else if(ctrlkey==('W'&0x1f)&&y>1){
+                        y -= 1;
+                        cursorpos = getidxfrompos(min(x, getlinelength(y)), y);
+                        elem = findat(cursorpos);
+                        
+                        while (((size_t)y-line)==0){
+                                line-=1;
+                        }
+                        if(line > 1){
+                                int length = getlinelength(line);
+                                for(int i = 0; i <= length; ++i)
+                                        if(lineelem){
+                                                lineelem=lineelem->prv;
+                                        }
+                        }
+                        else lineelem=grabbuffer()->dat;
+                        editorredraw();
+                        getposfromidx(cursorpos, &x, &y);
+	 		movecurs(x,y-(line-1));
+                        fflush(stdout);
 			return;
-		}else if(ctrlkey==('S'&0x1f)){
-			getposfromidx(cursorpos,&x,&y);
+		} else if(ctrlkey==('S'&0x1f)){
 			y += 1;
-			cursorpos=getidxfrompos(min(x,getlinelength(y)),y);
-			getposfromidx(cursorpos,&x,&y2);
-			movecurs(x,y-(line-1));
+			cursorpos = getidxfrompos(min(x, getlinelength(y)), y);
+                        elem = findat(cursorpos);
+			while (((size_t)y-line)>(size_t)TEXT_HEIGHT-1){
+                                line+=1;
+                        }
+                        if(line > 1){
+                                int length = getlinelength(line);
+                                printf("line len = %d", length);
+                                for(int i = 0; i <= length; ++i)
+                                        if(lineelem){
+                                                lineelem=lineelem->nxt;
+                                        }
+                        }
+                        else lineelem=grabbuffer()->dat;
+			editorredraw();
+                        getposfromidx(cursorpos, &x, &y);
+	 		movecurs(x,y-(line-1));
 			fflush(stdout);
 			return;
 		}else if(ctrlkey==('E'&0x1f)){
-			line-=1;
-			editorredraw();
 			return;
 		}else if(ctrlkey==('Q'&0x1f)){
-			line+=1;
-			editorredraw();
 			return;
 		}
 	}if(chr==COMMAND_CHARACTER){
@@ -571,28 +630,53 @@ editor(void){
 			printf(" ");
 		fflush(stdout);
 		execcommand();
-		fflush(stdout);
 		movecurs(x,y);
-	}else if(chr!='\b'&&chr!=127){
-		insertat(chr,cursorpos++);
-		editorredraw();
-		//redrawfrom(cursorpos-16);
 		fflush(stdout);
-	}else if(cursorpos>0){
-		char prev_char = findat(cursorpos - 1)->val;
+	}else if((chr!='\b'&&chr!=127&&(chr>=' '&&chr<='~'))||chr=='\n'||chr=='\t'){
+                txtelement_t *el = insertat(chr,cursorpos++);
+                if(el)
+                        elem=el;
+                if(!lineelem&&el){
+                        lineelem=elem;
+                }
+                int x,y;
+                getposfromidx(cursorpos,&x,&y);
+		editorredraw();
+                movecurs(1, TERM_HEIGHT);
+                printf("added %d,%c",chr,chr == '\n' ? '\0' : '\n' ? '\0' : chr);
+	        movecurs(x,y-(line-1));
+		fflush(stdout);
+	}else if(cursorpos>0&&(chr=='\b'||chr==127)&&elem){
+		char prev_char = 0;
+                if(elem && elem->prv){
+                        prev_char=elem->prv->val;
+                        elem=elem->prv;
+                }
+
 		if(prev_char == '\n'){
-			int x, y;
-			getpos(&x, &y);
-			if(y > 1){
-				movecurs(1, y - 1);
-				movecurs(getlinelength(y - 1) + 1, y - 1);
-			}
-			//redrawfrom(cursorpos - 16);
-			removeat(--cursorpos);
+                        --cursorpos;
+                        if (elem==lineelem){
+                                int length = getlinelength(line-1);
+                                for(int i = 0; i < length; ++i)
+                                        if(lineelem)
+                                                lineelem=lineelem->prv;
+                        }if(elem->nxt){
+                                removechar(elem->nxt, grabbuffer());
+                        }else{
+                                removechar(elem, grabbuffer());
+                                elem=NULL;
+                        }
 			editorredraw();
+			fflush(stdout);
 		}else{
 			//redrawfrom(cursorpos - 16);
-			removeat(--cursorpos);
+                        --cursorpos;
+                        if(elem->nxt){
+                                removechar(elem->nxt, grabbuffer());
+                        }else{
+                                removechar(elem, grabbuffer());
+                                elem=NULL;
+                        }
 			editorredraw();
 			fflush(stdout);
 		}

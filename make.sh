@@ -13,5 +13,5 @@ if [ $# -ne 1 ]; then
 	exit
 fi
 if [ "$1" == "-test" ]; then
-	valgrind --leak-check=yes --leak-check=full --show-leak-kinds=all -s ./bin/nem
+	valgrind --leak-check=yes --leak-check=full --show-leak-kinds=all --track-origins=yes -s ./bin/nem
 fi

@@ -27,7 +27,7 @@
 #define COMMAND_CHARACTER ('\e')
 #define TERM_WIDTH (getwidth())
 #define TERM_HEIGHT (getheight())
-#define TEXT_HEIGHT (TERM_HEIGHT - 1)
+#define TEXT_HEIGHT (TERM_HEIGHT - 2)
 
 void initeditor(void);
 bool editorrunning(void);

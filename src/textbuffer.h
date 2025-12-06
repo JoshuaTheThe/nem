@@ -92,12 +92,16 @@ txtelement_t *findatin(txtbuffer_t *buff, size_t at);
 void removeatin(txtbuffer_t *buff, size_t at);
 
 /* Insert a wchar at the given index. */
-void insertatin(txtbuffer_t *buff, wchar ch, size_t at);
+txtelement_t *
+insertatin(txtbuffer_t *buff, wchar ch, size_t at);
 
 /* Current Buffer (do the same, but to the working buffer). */
 txtelement_t *findat(size_t at);
 void removeat(size_t at);
-void insertat(wchar ch, size_t at);
+txtelement_t *
+insertat(wchar ch, size_t at);
+
+void removechar(txtelement_t *p, txtbuffer_t *buff);
 
 #endif
 
