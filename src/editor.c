@@ -127,7 +127,7 @@ void
 parsecommand(void){
 	char *x=strtok(&rawcommand[0]," ");
 	argument_count=0;
-	while(x&&x<&rawcommand[MAX_COMMAND_SIZE]&&argument_count<MAX_COMMAND_ARGS){
+	while(x&&x-rawcommand<MAX_COMMAND_SIZE&&argument_count<MAX_COMMAND_ARGS){
 		strncpy(command[argument_count],x,MAX_COMMAND_SIZE-1);
 		command[argument_count][MAX_COMMAND_SIZE - 1] = '\0';
 		x=strtok(NULL," ");
@@ -157,8 +157,9 @@ upon_redraw(action_t *this, txtbuffer_t *buf, const char **argv, size_t argc){
 bool
 upon_save(action_t *this, txtbuffer_t *buf, const char **argv, size_t argc){
 	(void)this;
-	char *path="test.txt";
+	char *path=strdup("test.txt");
 	if(argc>1){
+		free(path);
 		path=strdup(argv[1]);
 	}
 	FILE *fp = fopen(path, "w");
@@ -515,7 +516,7 @@ editorredraw(void){
 
 	int csx=1,csy=1;
 	getposfromidx(cursorpos, &csx, &csy);
-	if(line>1&&cursorpos>0)
+	if(line>=1)
 		startpos = getidxfrompos(1,line);
 	printf("\033[2J");
 	printf("\033[H");
@@ -526,14 +527,14 @@ editorredraw(void){
 	for(size_t i=startpos;i<buff->len;++i){
 		if(!ele)
 			break;
-		char chr=ele->val;
+		wchar chr=ele->val;
 		if(chr=='\n'){
 			y+=1;
 		}if((y-line)>=height-2){
 			break;
 		}
 		++x;
-		printf("%c", chr);
+		printf("%lc", chr);
 		ele=ele->nxt;
 	}
 
@@ -551,7 +552,7 @@ editorredraw(void){
 void
 editor(void){
 	if (!kbhit()){return;}
-	char chr=getchar();
+	wchar chr=getchar();
 	if((chr&0x1f)==chr){
 		int ctrlkey = chr;
 		int x=1,y=1;
@@ -578,41 +579,30 @@ editor(void){
 			cursorpos = getidxfrompos(min(x, getlinelength(y)), y);
 			elem = findat(cursorpos);
 			
-			while (((size_t)y-line)==0){
-				line-=1;
+			if(y < line){
+				line = y;
+				lineelem = findat(getidxfrompos(1, line));
 			}
-			if(line > 1){
-				int length = getlinelength(line);
-				for(int i = 0; i <= length; ++i)
-					if(lineelem){
-						lineelem=lineelem->prv;
-					}
-			}
-			else lineelem=grabbuffer()->dat;
+			
 			editorredraw();
 			getposfromidx(cursorpos, &x, &y);
-	 		movecurs(x,y-(line-1));
+			movecurs(x,y-(line-1));
 			fflush(stdout);
 			return;
 		} else if(ctrlkey==('S'&0x1f)){
 			y += 1;
 			cursorpos = getidxfrompos(min(x, getlinelength(y)), y);
 			elem = findat(cursorpos);
-			while (((size_t)y-line)>(size_t)TEXT_HEIGHT-1){
-				line+=1;
+			
+			int visible_height = getheight() - 2;
+			if(y >= line + visible_height){
+				line = y - visible_height + 1;
+				lineelem = findat(getidxfrompos(1, line));
 			}
-			if(line > 1){
-				int length = getlinelength(line);
-				printf("line len = %d", length);
-				for(int i = 0; i <= length; ++i)
-					if(lineelem){
-						lineelem=lineelem->nxt;
-					}
-			}
-			else lineelem=grabbuffer()->dat;
+			
 			editorredraw();
 			getposfromidx(cursorpos, &x, &y);
-	 		movecurs(x,y-(line-1));
+			movecurs(x,y-(line-1));
 			fflush(stdout);
 			return;
 		}else if(ctrlkey==('E'&0x1f)){
@@ -632,7 +622,7 @@ editor(void){
 		execcommand();
 		movecurs(x,y);
 		fflush(stdout);
-	}else if((chr!='\b'&&chr!=127&&(chr>=' '&&chr<='~'))||chr=='\n'||chr=='\t'){
+	}else if((chr!='\b'&&chr!=127&&(chr>=' '&&chr<='~'))||chr=='\n'||chr=='\t'||chr>256){
 		txtelement_t *el = insertat(chr,cursorpos++);
 		if(el)
 			elem=el;
