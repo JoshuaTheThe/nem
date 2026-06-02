@@ -1,5 +1,5 @@
 override MAKEFLAGS += -rR
-override OUTPUT := tl
+override OUTPUT := nem
 
 define DEFAULT_VAR =
     ifeq ($(origin $1),default)
